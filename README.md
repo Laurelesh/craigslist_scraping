@@ -9,4 +9,16 @@ The most obvious application is to flag craigslist scams. In this iteration, sin
 ## Methods:
 
 Using BeautifulSoup, I scrape housing data from craigslist.
-I use Pandas in a Jupyter notebook to write a simple anomaly detector.
+
+I use Pandas in a Jupyter notebook to clean and standardize the data, and to write a simple anomaly detector assuming a log-normal distribution for price per bedroom.
+
+## To Run:
+
+Open and run the jupyter notebook `craigslist_scraping_v2.ipynb`.
+
+### Dependencies:
+
+* python 3
+* Jupyter
+
+
