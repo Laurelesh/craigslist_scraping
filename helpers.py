@@ -2,6 +2,7 @@
 Helper functions for scraping, cleaning, and analyzing craigslist housing listings.
 """
 from bs4 import BeautifulSoup
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import re
@@ -288,7 +289,7 @@ def lump_neighborhoods_function(nh, sfhoods, oakhoods):
         sfhoods: list of san francisco neighborhoods
         oakhoods: list of oakland neighborhoods
     Returns: 'san francisco' if nh is in sfhoods, 'oakland' if nh is in oakhoods, or 'san jose' if nh contains 'san jose'
-    
+
     functional dependencies: scrape_neighborhoods_from_wikipedia (used to define sfhoods and oakhoods).
 
     """
@@ -397,6 +398,134 @@ def filter_to_popular_neighborhoods(df, min_count = 50):
 
     return df_maxhoods.drop(columns=['maxhood'])
 
+
+
+
+# feature transformations
+
+def transform_features(cleaned_data):
+
+    """
+    Args:
+        cleaned_data: dataframe with columns ['price', 'bedrooms']
+    Returns:
+        input dataframe with an additional column, price per bedroom
+    """
+
+    transformed_data = cleaned_data.copy()
+    transformed_data['price_per_room'] = transformed_data['price']/transformed_data['bedrooms']
+
+    return transformed_data
+
+# visualize
+
+def plot_price_distr(transformed_data, neighborhoods = None):
+    """
+    Produce a histogram of the prices for the given neighborhood, along with the log normal of the same mean and standard deviation.
+    Args:
+        transformed_data: dataframe with columns ['neighborhood', 'price_per_room']
+        neighborhoods: a list containing any of the values in the 'neighborhood' column of transformed_data
+    Returns: Nothing. Just displays plots.
+    """
+
+    if neighborhoods == None:
+         neighborhoods = list(set(transformed_data['neighborhood']))
+
+    fig, axes = plt.subplots(len(neighborhoods), figsize=(10,50), sharex=True)
+    plt.subplots_adjust(hspace = 1)
+
+
+    for i, neighborhood in enumerate(neighborhoods):
+
+        if type(axes) == np.ndarray:
+            axi = axes[i]
+        else:
+            axi = axes
+
+        # check neighborhood is represented in transformed_data:
+        if neighborhood not in list(set(transformed_data['neighborhood'])):
+            print(f"{neighborhood} not found as a value in the 'neighborhood' column of the given dataframe.")
+            return None
+
+        else:
+
+            nh_df = transformed_data.loc[transformed_data['neighborhood'] == neighborhood]
+
+            nh_prices = nh_df['price_per_room'].values
+
+            nh_prices_ln = np.log([p for p in nh_prices if p > 0])  # exclude prices of 0
+            mu_ln = np.mean(nh_prices_ln)
+            std_ln = np.std(nh_prices_ln)
+
+
+            axi.hist(nh_prices, bins = 10, density = True);
+            Y = np.exp(np.arange(0, np.log(transformed_data['price_per_room'].max()), .01))
+            Ydistr = (1/((2*np.pi)**.5*std_ln*Y))*np.array( np.exp(-(np.log(Y) - mu_ln)**2/(2*std_ln**2)) )
+            axi.plot( Y, Ydistr  );
+
+            axi.set_title(neighborhood);
+
+#     return fig
+
+# detect outliers
+
+def get_outliers(transformed_data, neighborhoods = None, z = 2.5):
+    """
+    Detect listings in the dataframe transformed_data with anomologously low price per room.
+    Args:
+        transformed_data: dataframe with columns ['neighborhood', 'price_per_room']
+        neighborhoods: a list containing any of the values in the 'neighborhood' column of transformed_data
+        z: largest allowed z-score of a non-outlier. Defaults to 2.5.
+
+    Returns: rows of transformed_data for the given neighborhoods with anomalously low prices per room.
+    """
+
+    if neighborhoods == None:
+        neighborhoods = list(set(transformed_data['neighborhood']))
+
+#     fig, axes = plt.subplots(len(neighborhoods))
+#     plt.subplots_adjust(hspace = 1)
+
+    low_outliers_df_all_neighborhoods = pd.DataFrame(columns = transformed_data.columns)
+
+    for i, neighborhood in enumerate(neighborhoods):
+
+#         if type(axes) == np.ndarray:
+#             axi = axes[i]
+#         else:
+#             axi = axes
+
+        # check neighborhood is represented in transformed_data:
+        if neighborhood not in list(set(transformed_data['neighborhood'])):
+            print(f"{neighborhood} not found as a value in the 'neighborhood' column of the given dataframe.")
+            low_outliers_df = None
+
+        else:
+
+            nh_df = transformed_data.loc[transformed_data['neighborhood'] == neighborhood]
+
+            nh_prices = nh_df['price_per_room'].values
+
+            nh_prices_ln = np.log([p for p in nh_prices if p > 0])  # exclude prices of 0
+            mu_ln = np.mean(nh_prices_ln)
+            std_ln = np.std(nh_prices_ln)
+
+            # Filter dataframe
+            lowest_non_outlier_price = np.exp(mu_ln - z*std_ln)
+            low_outliers_df = nh_df.loc[nh_df['price_per_room'] < lowest_non_outlier_price]
+
+
+#             # Plotting
+#             axi.hist(nh_prices, bins = 10, density = True);
+#             Y = np.exp(np.arange(0,10,.01))
+#             Ydistr = (1/((2*np.pi)**.5*std_ln*Y))*np.array( np.exp(-(np.log(Y) - mu_ln)**2/(2*std_ln**2)) )
+#             axi.plot( Y, Ydistr  );
+#             axi.set_title(neighborhood);
+
+        low_outliers_df_all_neighborhoods = pd.concat([low_outliers_df_all_neighborhoods, low_outliers_df], axis = 0)
+
+
+    return low_outliers_df_all_neighborhoods
 
 
 
